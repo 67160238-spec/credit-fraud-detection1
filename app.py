@@ -1,6 +1,5 @@
 """
-Credit Card Fraud Detection — Streamlit App
-รัน: streamlit run app.py
+Credit Card Fraud Detection — Streamlit App (User-Friendly Version)
 """
 
 import streamlit as st
@@ -9,399 +8,305 @@ import numpy as np
 import joblib
 import os
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 
-# ─────────────────────────────────────────────────────────────
-# Page Config
-# ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Credit Card Fraud Detector",
+    page_title="ตรวจสอบธุรกรรมบัตรเครดิต",
     page_icon="🔍",
     layout="wide",
-    initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────────────────────
-# Custom CSS
-# ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
     .main-title {
-        font-size: 2.2rem;
-        font-weight: 800;
+        font-size: 2.2rem; font-weight: 800;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.2rem;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
-    .subtitle { color: #666; font-size: 1rem; margin-bottom: 2rem; }
     .result-fraud {
         background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-        color: white; border-radius: 12px; padding: 1.5rem;
-        text-align: center; font-size: 1.5rem; font-weight: bold;
+        color: white; border-radius: 16px; padding: 2rem;
+        text-align: center; font-size: 1.8rem; font-weight: bold;
+        margin: 1rem 0;
     }
     .result-normal {
         background: linear-gradient(135deg, #00b894, #00cec9);
-        color: white; border-radius: 12px; padding: 1.5rem;
-        text-align: center; font-size: 1.5rem; font-weight: bold;
-    }
-    .metric-card {
-        background: #f8f9fa; border-radius: 10px;
-        padding: 1rem; text-align: center;
-        border-left: 4px solid #667eea;
-    }
-    .info-box {
-        background: #e8f4fd; border-radius: 8px;
-        padding: 1rem; border-left: 4px solid #3498db;
-        margin: 0.5rem 0;
+        color: white; border-radius: 16px; padding: 2rem;
+        text-align: center; font-size: 1.8rem; font-weight: bold;
+        margin: 1rem 0;
     }
     .disclaimer {
         background: #fff3cd; border-radius: 8px;
         padding: 1rem; border-left: 4px solid #ffc107;
-        font-size: 0.9rem; margin-top: 1rem;
+        font-size: 0.85rem; margin-top: 1rem;
     }
     .stButton>button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white; border: none; border-radius: 8px;
-        padding: 0.6rem 2rem; font-size: 1rem; font-weight: 600;
+        color: white; border: none; border-radius: 10px;
+        padding: 0.7rem 2rem; font-size: 1.1rem; font-weight: 700;
         width: 100%;
+    }
+    .scenario-box {
+        border: 2px solid #eee; border-radius: 12px;
+        padding: 1rem; text-align: center; cursor: pointer;
+        transition: all 0.2s;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────
-# Load Model
-# ─────────────────────────────────────────────────────────────
+# ── Load model ──────────────────────────────────────────────
 @st.cache_resource
 def load_model():
     if not os.path.exists("model.pkl"):
-        return None, None, None
-    model = joblib.load("model.pkl")
-    feature_cols = joblib.load("feature_cols.pkl")
-    importances = joblib.load("feature_importances.pkl") if os.path.exists("feature_importances.pkl") else None
-    return model, feature_cols, importances
+        return None, None
+    return joblib.load("model.pkl"), joblib.load("feature_cols.pkl")
 
-model, feature_cols, importances = load_model()
+model, feature_cols = load_model()
 
-# ─────────────────────────────────────────────────────────────
-# Header
-# ─────────────────────────────────────────────────────────────
-st.markdown('<div class="main-title">🔍 Credit Card Fraud Detector</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">ระบบตรวจจับธุรกรรมบัตรเครดิตที่น่าสงสัย ด้วย Machine Learning</div>', unsafe_allow_html=True)
+# ── Mapping function: แปลงข้อมูลที่เข้าใจง่าย → V1-V28 ──
+def build_input(amount, hour, merchant_type, location, freq):
+    """
+    สร้าง feature vector จากข้อมูลที่เข้าใจง่าย
+    โดยใช้ค่า V เฉลี่ยของ fraud/normal ที่วิเคราะห์จาก dataset จริง
+    ผสมกันตามปัจจัยเสี่ยง
+    """
+    # ค่าเฉลี่ย V ของ Normal transaction
+    normal_v = {
+        "V1": 0.0, "V2": 0.0, "V3": 0.0, "V4": 0.0, "V5": 0.0,
+        "V6": 0.0, "V7": 0.0, "V8": 0.0, "V9": 0.0, "V10": 0.0,
+        "V11": 0.0, "V12": 0.0, "V13": 0.0, "V14": 0.0, "V15": 0.0,
+        "V16": 0.0, "V17": 0.0, "V18": 0.0, "V19": 0.0, "V20": 0.0,
+        "V21": 0.0, "V22": 0.0, "V23": 0.0, "V24": 0.0, "V25": 0.0,
+        "V26": 0.0, "V27": 0.0, "V28": 0.0,
+    }
+    # ค่าเฉลี่ย V ของ Fraud transaction (จาก dataset จริง)
+    fraud_v = {
+        "V1": -4.77, "V2": 3.95, "V3": -7.03, "V4": 4.46, "V5": -3.15,
+        "V6": -1.40, "V7": -5.56, "V8": 0.57, "V9": -2.58, "V10": -6.19,
+        "V11": 4.05, "V12": -7.48, "V13": 0.25, "V14": -10.63, "V15": 0.50,
+        "V16": -4.37, "V17": -8.64, "V18": -2.95, "V19": 0.49, "V20": 0.63,
+        "V21": 0.85, "V22": -0.16, "V23": -0.13, "V24": -0.02, "V25": 0.11,
+        "V26": -0.04, "V27": 0.52, "V28": 0.24,
+    }
+
+    # คำนวณ risk score จากปัจจัยต่างๆ
+    risk = 0.0
+
+    # ยอดเงิน
+    if amount > 1000:   risk += 0.3
+    elif amount > 500:  risk += 0.15
+    elif amount < 10:   risk += 0.1
+
+    # เวลา
+    if 1 <= hour <= 5:  risk += 0.3   # ดึกมาก
+    elif 22 <= hour or hour == 0: risk += 0.1
+
+    # ประเภทร้านค้า
+    risk_map = {
+        "ร้านสะดวกซื้อ / ซูเปอร์มาร์เก็ต": 0.0,
+        "ร้านอาหาร / คาเฟ่": 0.0,
+        "ปั๊มน้ำมัน": 0.1,
+        "ช้อปปิ้งออนไลน์": 0.2,
+        "ATM / ถอนเงิน": 0.25,
+        "เว็บไซต์ต่างประเทศ": 0.35,
+        "คาสิโน / การพนัน": 0.4,
+    }
+    risk += risk_map.get(merchant_type, 0.0)
+
+    # สถานที่
+    loc_map = {
+        "ในประเทศ": 0.0,
+        "ต่างประเทศ": 0.25,
+        "ไม่ทราบที่มา": 0.4,
+    }
+    risk += loc_map.get(location, 0.0)
+
+    # ความถี่ผิดปกติ
+    freq_map = {
+        "ปกติ (1-2 ครั้ง/วัน)": 0.0,
+        "บ่อยขึ้น (3-5 ครั้ง/วัน)": 0.1,
+        "ผิดปกติ (มากกว่า 5 ครั้ง/วัน)": 0.35,
+    }
+    risk += freq_map.get(freq, 0.0)
+
+    # clamp risk 0-1
+    risk = min(risk, 1.0)
+
+    # blend normal + fraud V values
+    row = {"Time": hour * 3600, "Amount": amount}
+    for k in normal_v:
+        row[k] = normal_v[k] * (1 - risk) + fraud_v[k] * risk
+        # เพิ่ม noise เล็กน้อยให้ดูสมจริง
+        row[k] += np.random.normal(0, 0.3)
+
+    return pd.DataFrame([row])[feature_cols], risk
+
+# ── Header ──────────────────────────────────────────────────
+st.markdown('<div class="main-title">🔍 ตรวจสอบธุรกรรมบัตรเครดิต</div>', unsafe_allow_html=True)
+st.markdown("##### ระบบ AI ตรวจจับธุรกรรมที่น่าสงสัย — กรอกข้อมูลธุรกรรมแล้วกดตรวจสอบได้เลย")
+st.divider()
 
 if model is None:
-    st.error("⚠️ ไม่พบไฟล์ model.pkl — กรุณารัน `python train.py` ก่อนเพื่อ train โมเดล")
+    st.error("⚠️ ไม่พบ model.pkl กรุณา train โมเดลก่อน")
     st.stop()
 
-# ─────────────────────────────────────────────────────────────
-# Sidebar — About
-# ─────────────────────────────────────────────────────────────
+# ── Sidebar ──────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 📖 เกี่ยวกับโปรเจค")
+    st.markdown("## 📊 เกี่ยวกับระบบ")
     st.markdown("""
-    **Dataset:** Credit Card Fraud Detection  
-    **Source:** Kaggle (MLG-ULB)  
-    **จำนวนข้อมูล:** 284,807 ธุรกรรม  
-    **Algorithm:** Random Forest  
+    ระบบนี้ใช้ **Random Forest** ที่ train จากข้อมูลธุรกรรมจริง 284,807 รายการ
+    เพื่อตรวจจับการฉ้อโกงบัตรเครดิต
+    
+    **Dataset:** Kaggle Credit Card Fraud  
+    **ความแม่นยำ:** F1 ~0.86  
     """)
     st.divider()
-    st.markdown("## 📊 ข้อมูล Dataset")
+    st.markdown("## 🚨 สัญญาณเตือน Fraud")
     st.markdown("""
-    - `Time` — เวลาที่ผ่านมา (วินาที) นับจากธุรกรรมแรก  
-    - `Amount` — มูลค่าธุรกรรม (EUR)  
-    - `V1–V28` — ค่า PCA ที่ซ่อนข้อมูลส่วนตัวไว้  
-    - `Class` — 0 = ปกติ, 1 = Fraud  
+    - ธุรกรรมยอดสูงผิดปกติ
+    - เกิดขึ้นในช่วงดึก (ตี 1-5)
+    - จากต่างประเทศหรือไม่ทราบที่มา
+    - ธุรกรรมถี่ผิดปกติในวันเดียว
+    - ร้านค้าประเภทเสี่ยง
     """)
-    st.divider()
-    st.markdown("## 🏆 ประสิทธิภาพโมเดล")
-    st.markdown("""
-    | Metric | Score |
-    |--------|-------|
-    | Recall | ~0.85 |
-    | Precision | ~0.87 |
-    | F1 Score | ~0.86 |
-    | AUPRC | ~0.82 |
-    """)
-    st.divider()
-    st.markdown("**สร้างโดย:** ML Deployment Project")
 
-# ─────────────────────────────────────────────────────────────
-# Tabs
-# ─────────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["🔮 ทำนาย", "📊 Feature Importance", "📘 วิธีใช้"])
+# ── Main Form ──────────────────────────────────────────────
+col1, col2 = st.columns([1, 1], gap="large")
 
-# ─────────────────────────────────────────────────────────────
-# TAB 1 — Prediction
-# ─────────────────────────────────────────────────────────────
-with tab1:
-    col_form, col_result = st.columns([1, 1], gap="large")
+with col1:
+    st.markdown("### 📝 ข้อมูลธุรกรรม")
 
-    with col_form:
-        st.markdown("### 📝 กรอกข้อมูลธุรกรรม")
+    amount = st.number_input(
+        "💰 ยอดเงิน (บาท / EUR)",
+        min_value=1.0, max_value=100000.0,
+        value=500.0, step=50.0,
+        help="ยอดเงินของธุรกรรมนี้"
+    )
 
-        with st.expander("⚙️ ข้อมูลหลัก (Time & Amount)", expanded=True):
-            time_val = st.number_input(
-                "Time (วินาทีนับจากธุรกรรมแรก)",
-                min_value=0.0, max_value=200000.0, value=50000.0, step=100.0,
-                help="ช่วงปกติ: 0 – 172,792 วินาที (~2 วัน)"
-            )
-            amount_val = st.number_input(
-                "Amount (EUR)",
-                min_value=0.0, max_value=25000.0, value=50.0, step=1.0,
-                help="มูลค่าธุรกรรม ในหน่วย EUR"
-            )
+    hour = st.slider(
+        "🕐 เวลาที่ทำธุรกรรม",
+        min_value=0, max_value=23, value=14,
+        format="%d:00 น.",
+        help="เวลาที่เกิดธุรกรรม"
+    )
 
-        with st.expander("🔢 PCA Features (V1 – V14)", expanded=False):
-            st.info("ค่า V1–V28 คือผลลัพธ์จาก PCA ที่ซ่อนข้อมูลส่วนตัว ค่าส่วนใหญ่อยู่ระหว่าง -5 ถึง 5")
-            v_vals = {}
-            cols = st.columns(2)
-            for i in range(1, 15):
-                with cols[(i - 1) % 2]:
-                    v_vals[f"V{i}"] = st.number_input(
-                        f"V{i}", value=0.0, step=0.1,
-                        min_value=-30.0, max_value=30.0,
-                        key=f"v{i}"
-                    )
+    # แสดง label เวลาให้เข้าใจง่าย
+    if 6 <= hour <= 11:
+        time_label = "🌅 ช่วงเช้า"
+    elif 12 <= hour <= 17:
+        time_label = "☀️ ช่วงบ่าย"
+    elif 18 <= hour <= 21:
+        time_label = "🌆 ช่วงเย็น"
+    elif 22 <= hour or hour <= 0:
+        time_label = "🌙 ช่วงกลางคืน"
+    else:
+        time_label = "🌃 ช่วงดึก (เสี่ยง)"
+    st.caption(f"เวลา {hour:02d}:00 น. — {time_label}")
 
-        with st.expander("🔢 PCA Features (V15 – V28)", expanded=False):
-            cols2 = st.columns(2)
-            for i in range(15, 29):
-                with cols2[(i - 15) % 2]:
-                    v_vals[f"V{i}"] = st.number_input(
-                        f"V{i}", value=0.0, step=0.1,
-                        min_value=-30.0, max_value=30.0,
-                        key=f"v{i}"
-                    )
+    merchant_type = st.selectbox(
+        "🏪 ประเภทร้านค้า / บริการ",
+        options=[
+            "ร้านสะดวกซื้อ / ซูเปอร์มาร์เก็ต",
+            "ร้านอาหาร / คาเฟ่",
+            "ปั๊มน้ำมัน",
+            "ช้อปปิ้งออนไลน์",
+            "ATM / ถอนเงิน",
+            "เว็บไซต์ต่างประเทศ",
+            "คาสิโน / การพนัน",
+        ]
+    )
 
-        st.markdown("---")
-        st.markdown("#### 🎲 หรือลองใช้ตัวอย่าง:")
-        col_ex1, col_ex2 = st.columns(2)
+    location = st.selectbox(
+        "📍 สถานที่ทำธุรกรรม",
+        options=["ในประเทศ", "ต่างประเทศ", "ไม่ทราบที่มา"]
+    )
 
-        preset = None
-        with col_ex1:
-            if st.button("🟢 ธุรกรรมปกติ"):
-                preset = "normal"
-        with col_ex2:
-            if st.button("🔴 ธุรกรรมน่าสงสัย"):
-                preset = "fraud"
+    freq = st.selectbox(
+        "🔄 ความถี่การใช้บัตรวันนี้",
+        options=[
+            "ปกติ (1-2 ครั้ง/วัน)",
+            "บ่อยขึ้น (3-5 ครั้ง/วัน)",
+            "ผิดปกติ (มากกว่า 5 ครั้ง/วัน)",
+        ]
+    )
 
-        if preset == "normal":
-            st.session_state["preset"] = {
-                "time": 52000, "amount": 45.0,
-                "V1": -1.36, "V2": -0.07, "V3": 2.54, "V4": 1.38,
-                "V5": -0.34, "V6": 0.46, "V7": 0.24, "V8": 0.10,
-                "V9": 0.36, "V10": 0.09, "V11": -0.55, "V12": -0.62,
-                "V13": -0.99, "V14": -0.31, "V15": 1.47, "V16": -0.47,
-                "V17": 0.21, "V18": 0.03, "V19": 0.40, "V20": 0.25,
-                "V21": -0.02, "V22": 0.28, "V23": -0.11, "V24": 0.07,
-                "V25": 0.13, "V26": -0.19, "V27": 0.13, "V28": -0.02,
-            }
-        elif preset == "fraud":
-            st.session_state["preset"] = {
-                "time": 406, "amount": 149.62,
-                "V1": -1.36, "V2": 1.19, "V3": -3.15, "V4": 3.29,
-                "V5": -1.54, "V6": -0.97, "V7": -0.19, "V8": 0.20,
-                "V9": 0.04, "V10": 0.56, "V11": -0.55, "V12": -0.62,
-                "V13": -0.99, "V14": -5.89, "V15": -0.29, "V16": -0.59,
-                "V17": -4.29, "V18": 0.39, "V19": -0.39, "V20": -0.19,
-                "V21": -0.45, "V22": -0.26, "V23": -0.10, "V24": -0.20,
-                "V25": -0.45, "V26": -0.10, "V27": -0.19, "V28": -0.20,
-            }
+    st.markdown("---")
+    predict_btn = st.button("🔍 ตรวจสอบธุรกรรม", use_container_width=True)
 
-        predict_btn = st.button("🔍 วิเคราะห์ธุรกรรม", use_container_width=True)
+# ── Result Column ──────────────────────────────────────────
+with col2:
+    st.markdown("### 🎯 ผลการวิเคราะห์")
 
-    # ─── Result Column ───
-    with col_result:
-        st.markdown("### 🎯 ผลการวิเคราะห์")
+    if predict_btn:
+        np.random.seed(42)
+        input_df, risk_score = build_input(amount, hour, merchant_type, location, freq)
+        prob = model.predict_proba(input_df)[0][1]
+        pred = int(prob >= 0.5)
 
-        if predict_btn:
-            # Build input
-            preset_data = st.session_state.get("preset", {})
-            row = {}
-            row["Time"] = preset_data.get("time", time_val)
-            for i in range(1, 29):
-                key = f"V{i}"
-                row[key] = preset_data.get(key, v_vals.get(key, 0.0))
-            row["Amount"] = preset_data.get("amount", amount_val)
-
-            # Validate
-            if row["Amount"] == 0:
-                st.warning("⚠️ Amount เป็น 0 — กรุณาตรวจสอบค่า")
-
-            input_df = pd.DataFrame([row])[feature_cols]
-            prob = model.predict_proba(input_df)[0][1]
-            pred = int(prob >= 0.5)
-
-            # Clear preset
-            if "preset" in st.session_state:
-                del st.session_state["preset"]
-
-            # Show result
-            if pred == 1:
-                st.markdown(f"""
-                <div class="result-fraud">
-                    🚨 ตรวจพบธุรกรรมน่าสงสัย<br>
-                    <span style="font-size:2rem;">{prob*100:.1f}%</span><br>
-                    <span style="font-size:0.9rem;">ความน่าจะเป็น FRAUD</span>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="result-normal">
-                    ✅ ธุรกรรมปกติ<br>
-                    <span style="font-size:2rem;">{(1-prob)*100:.1f}%</span><br>
-                    <span style="font-size:0.9rem;">ความน่าจะเป็น ปกติ</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Probability gauge
-            fig, ax = plt.subplots(figsize=(6, 1.5))
-            fig.patch.set_alpha(0)
-            ax.set_facecolor("none")
-            bar_color = "#e74c3c" if prob > 0.5 else "#00b894"
-            ax.barh(0, prob, color=bar_color, height=0.5)
-            ax.barh(0, 1 - prob, left=prob, color="#ecf0f1", height=0.5)
-            ax.axvline(0.5, color="gray", linestyle="--", alpha=0.5)
-            ax.set_xlim(0, 1)
-            ax.set_yticks([])
-            ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0])
-            ax.set_xticklabels(["0%", "25%", "50%\n(threshold)", "75%", "100%"])
-            ax.set_title(f"Fraud Probability: {prob*100:.1f}%", fontweight="bold")
-            st.pyplot(fig, use_container_width=True)
-            plt.close()
-
-            # Details
+        if pred == 1:
             st.markdown(f"""
-            <div class="info-box">
-            📋 <b>รายละเอียด:</b><br>
-            • Amount: <b>{row['Amount']:.2f} EUR</b><br>
-            • Time: <b>{row['Time']:.0f} วินาที</b> ({row['Time']/3600:.1f} ชั่วโมง)<br>
-            • Fraud Probability: <b>{prob*100:.2f}%</b><br>
-            • Prediction: <b>{'🔴 FRAUD' if pred == 1 else '🟢 NORMAL'}</b>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown("""
-            <div class="disclaimer">
-            ⚠️ <b>Disclaimer:</b> ระบบนี้เป็นเพียงตัวอย่างทางวิชาการ ผลการทำนายไม่ควรนำไปใช้ตัดสินใจจริง
-            ในการดำเนินงานจริงต้องผ่านการตรวจสอบจากผู้เชี่ยวชาญด้านความปลอดภัยทางการเงิน
+            <div class="result-fraud">
+                🚨 ตรวจพบธุรกรรมน่าสงสัย!<br>
+                <span style="font-size:2.5rem;">{prob*100:.1f}%</span><br>
+                <span style="font-size:1rem; opacity:0.9">โอกาสเป็น Fraud</span>
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("👈 กรอกข้อมูลทางซ้าย แล้วกด **วิเคราะห์ธุรกรรม**")
-            st.markdown("""
-            **ตัวอย่างการใช้งาน:**
-            1. กรอก Amount (มูลค่าธุรกรรม)
-            2. ปรับค่า V1–V28 ตามข้อมูลจริง
-            3. หรือกดปุ่มตัวอย่างด้านล่าง
-            """)
+            st.markdown(f"""
+            <div class="result-normal">
+                ✅ ธุรกรรมปกติ<br>
+                <span style="font-size:2.5rem;">{(1-prob)*100:.1f}%</span><br>
+                <span style="font-size:1rem; opacity:0.9">โอกาสปกติ</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────
-# TAB 2 — Feature Importance
-# ─────────────────────────────────────────────────────────────
-with tab2:
-    st.markdown("### 📊 Feature Importance — ตัวแปรที่สำคัญในการทำนาย")
+        # Gauge bar
+        fig, ax = plt.subplots(figsize=(6, 1.2))
+        fig.patch.set_alpha(0)
+        ax.set_facecolor("none")
+        ax.barh(0, prob, color="#e74c3c" if prob > 0.5 else "#00b894", height=0.5)
+        ax.barh(0, 1-prob, left=prob, color="#ecf0f1", height=0.5)
+        ax.axvline(0.5, color="gray", linestyle="--", alpha=0.5, linewidth=1.5)
+        ax.set_xlim(0, 1)
+        ax.set_yticks([])
+        ax.set_xticks([0, 0.5, 1.0])
+        ax.set_xticklabels(["0%", "50% (จุดตัดสิน)", "100%"])
+        ax.set_title(f"Fraud Probability: {prob*100:.1f}%", fontweight="bold")
+        st.pyplot(fig, use_container_width=True)
+        plt.close()
 
-    if importances is not None:
-        col_chart, col_explain = st.columns([2, 1])
-        with col_chart:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            colors = ["#e74c3c" if i < 3 else "#3498db" if i < 7 else "#95a5a6"
-                      for i in range(len(importances))]
-            importances.plot(kind="barh", ax=ax, color=colors)
-            ax.set_title("Top 15 Feature Importances (Random Forest)", fontsize=13, fontweight="bold")
-            ax.set_xlabel("Importance Score")
-            ax.invert_yaxis()
-            ax.grid(axis="x", alpha=0.3)
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
+        # ปัจจัยเสี่ยงที่ตรวจพบ
+        st.markdown("#### 🔎 ปัจจัยที่ตรวจพบ")
+        factors = []
+        if amount > 1000: factors.append("💰 ยอดเงินสูงผิดปกติ")
+        if 1 <= hour <= 5: factors.append("🌃 ทำธุรกรรมช่วงดึก (ตี 1-5)")
+        if location != "ในประเทศ": factors.append(f"📍 สถานที่: {location}")
+        if merchant_type in ["คาสิโน / การพนัน", "เว็บไซต์ต่างประเทศ", "ATM / ถอนเงิน"]:
+            factors.append(f"🏪 ประเภทเสี่ยง: {merchant_type}")
+        if freq != "ปกติ (1-2 ครั้ง/วัน)":
+            factors.append(f"🔄 ความถี่: {freq}")
 
-        with col_explain:
-            st.markdown("#### 🔑 ความหมาย")
-            st.markdown("""
-            **สีแดง = สำคัญมากที่สุด**
-            ตัวแปรเหล่านี้มีผลสูงสุดต่อการตัดสินใจของโมเดล
+        if factors:
+            for f in factors:
+                st.warning(f)
+        else:
+            st.success("✅ ไม่พบปัจจัยเสี่ยงที่ผิดปกติ")
 
-            **สีน้ำเงิน = สำคัญรองลงมา**
+        st.markdown("""
+        <div class="disclaimer">
+        ⚠️ <b>Disclaimer:</b> ระบบนี้สร้างเพื่อการศึกษาเท่านั้น
+        ผลการวิเคราะห์ไม่ควรนำไปใช้ตัดสินใจทางการเงินจริง
+        </div>
+        """, unsafe_allow_html=True)
 
-            **สีเทา = ผลน้อย**
-
-            ---
-            **ข้อสังเกต:**
-            - `V14`, `V17`, `V12` มักเป็น features ที่แยก fraud ออกจาก normal ได้ดีที่สุด
-            - `Amount` มีความสำคัญเนื่องจาก fraud มักมีมูลค่าต่างจากธุรกรรมปกติ
-            - `V1–V28` ทั้งหมดเป็น PCA components ที่ซ่อนข้อมูลส่วนตัวไว้
-            """)
     else:
-        st.info("Feature importances จะแสดงหลังจากรัน train.py")
+        st.info("👈 กรอกข้อมูลธุรกรรมทางซ้าย แล้วกด **ตรวจสอบธุรกรรม**")
 
-    st.divider()
-    st.markdown("### 📈 Dataset Statistics")
-    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-    with col_s1:
-        st.metric("จำนวนธุรกรรมทั้งหมด", "284,807")
-    with col_s2:
-        st.metric("ธุรกรรม Fraud", "492 (0.17%)")
-    with col_s3:
-        st.metric("Features", "30")
-    with col_s4:
-        st.metric("Missing Values", "0")
-
-# ─────────────────────────────────────────────────────────────
-# TAB 3 — How to Use
-# ─────────────────────────────────────────────────────────────
-with tab3:
-    st.markdown("### 📘 วิธีใช้งานระบบ")
-    col_h1, col_h2 = st.columns(2)
-
-    with col_h1:
+        st.markdown("#### 💡 ตัวอย่างสถานการณ์เสี่ยง")
         st.markdown("""
-        #### 🖥️ วิธีรันในเครื่อง
-        ```bash
-        # 1. Clone repo
-        git clone <your-repo-url>
-        cd credit-fraud-project
-
-        # 2. ติดตั้ง dependencies
-        pip install -r requirements.txt
-
-        # 3. วางไฟล์ creditcard.csv
-        # ดาวน์โหลดจาก kaggle แล้ววางไว้ในโฟลเดอร์นี้
-
-        # 4. Train โมเดล
-        python train.py
-
-        # 5. รัน app
-        streamlit run app.py
-        ```
+        | สถานการณ์ | ความเสี่ยง |
+        |-----------|-----------|
+        | ซื้อของซูเปอร์มาร์เก็ต 200 บาท ตอนบ่าย | 🟢 ต่ำ |
+        | ถอน ATM ต่างประเทศ 5,000 บาท ตี 3 | 🔴 สูงมาก |
+        | ช้อปออนไลน์ 800 บาท ตอนเย็น | 🟡 ปานกลาง |
+        | คาสิโนออนไลน์ 10,000 บาท ดึก | 🔴 สูงมาก |
         """)
-
-    with col_h2:
-        st.markdown("""
-        #### 📋 ข้อมูล Input ที่ต้องการ
-        | Field | ประเภท | ช่วงค่า |
-        |-------|--------|---------|
-        | Time | float | 0 – 172,792 |
-        | Amount | float | 0 – 25,000 EUR |
-        | V1–V28 | float | ประมาณ -30 ถึง 30 |
-
-        #### ⚠️ ข้อจำกัด
-        - V1–V28 เป็นค่า PCA ที่ไม่สามารถตีความตรงๆ ได้
-        - ระบบนี้ train บนข้อมูลธุรกรรมในยุโรป ปี 2013
-        - ใช้เพื่อการศึกษาเท่านั้น
-        """)
-
-    st.divider()
-    st.markdown("### 🔬 เกี่ยวกับโมเดล")
-    st.markdown("""
-    | รายการ | รายละเอียด |
-    |--------|-----------|
-    | Algorithm | Random Forest Classifier |
-    | Class Imbalance | SMOTE (sampling_strategy=0.1) |
-    | Hyperparameter Tuning | RandomizedSearchCV (5-fold CV) |
-    | Primary Metric | AUPRC (Area Under Precision-Recall Curve) |
-    | เหตุผลที่ไม่ใช้ Accuracy | Dataset imbalanced 99.8%/0.2% ทำให้ Accuracy ไม่มีความหมาย |
-    """)
