@@ -4,5 +4,6 @@ scikit-learn
 imbalanced-learn
 matplotlib
 seaborn
-streamlit
 joblib
+altair==4.2.2
+streamlit==1.28.0
